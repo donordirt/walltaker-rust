@@ -9,3 +9,8 @@ To build, change the fallback wallpaper in src/main.rs, then you should be able 
 If you want to, you can also set the wallpaper to download somewhere outside /tmp/, and the fallback doesn't matter.
 
 (there's 0 error checking, and i've never written rust before. good luck)
+
+
+Requires: libssl, libxrandr-dev
+
+DE support: https://crates.io/crates/more-wallpapers

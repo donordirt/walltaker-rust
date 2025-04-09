@@ -1,4 +1,136 @@
 
+use std::env;
+use std::fs;
+use std::io::Write;
+use reqwest;
+use toml::Table;
+
+use std::time::Duration;
+use std::thread;
+
+use reqwest::Error;
+use json::parse;
+
+fn parse_env_var(res: &str) -> String {
+    if res.ends_with("/") {
+        return String::from(res);
+    } else {
+        return String::from(res.to_owned() + "/");
+    }
+}
+
+async fn update_link(id: &str, old: &str) -> String {
+    async fn helper(id: &str, _old: &str) -> Result<String, Error> {
+        let res = 
+            reqwest::get("https://walltaker.joi.how/api/links/".to_owned()+id+".json")
+                .await?.text().await?;
+        return Ok(res);
+    }
+
+    let out = helper(id, old).await;
+    match out {
+        Ok(json) => {
+            let parsed = parse(json.as_str()).unwrap();
+            let mut output_str : String = json::stringify(parsed["post_url"].clone());
+            output_str.pop();
+            output_str.remove(0);
+            return output_str;
+        },
+        Err(_e) => return String::from(old)
+    }
+    //let step_2 = match res.error_for_status {
+    //    
+    //}
+        //?.text().await?;
+    /*
+    let parsed = parse(res.as_str()).unwrap();
+    let mut output_str = json::stringify(parsed["post_url"].clone());
+    output_str.pop();
+    output_str.remove(0);
+    return Ok(output_str);
+    */
+    
+    //return String::from(old);
+}
+
+#[tokio::main]
+async fn main() {
+    //TODO: test if this even works
+    let xdg_config_home : Result<String, env::VarError> = env::var("XDG_CONFIG_HOME");
+    let user_home : Result<String, env::VarError> = env::var("HOME");
+    let home : String;
+    let path : String;
+    //TODO: toml
+    //println!("{:?}", xdg_config_home);
+    home = match user_home {
+        Ok(res) => res,
+        Err(_) => String::from("~")
+    };
+    path = match xdg_config_home {
+        Ok(res) =>  parse_env_var(&res),
+        Err(_) => String::from(home + "/.config/")
+    };
+    let settings_path = path.to_owned() + "walltaker.toml";
+    let file = std::path::Path::new(&settings_path);
+    let mut links = vec![String::from("")];
+    let mut web_url = vec![String::from("")];
+    let mut local_url = vec![String::from("")];
+    let output_dir : String;
+    //println!("{:?}", path);
+    if file.exists() {
+        println!("Loading settings from {}", settings_path);
+        let contents = fs::read_to_string(settings_path)
+                .expect("Should have been able to read the file")
+                .to_string();
+        let table = contents.parse::<Table>().unwrap();
+        println!("{}", table["links"]);
+        let links_step_1 = table["links"].as_str();
+        let links_step_2;
+        match links_step_1 {
+            Some(x) => links_step_2 = x.split(","),
+            _none => return
+        }
+        let fallback_option = table["fallbacks"].as_str();
+        let fallback = match fallback_option {
+            Some(x) => x,
+            _none => ""
+        };
+        let output_option = table["output_dir"].as_str();
+        output_dir = match output_option {
+            Some(x) => parse_env_var(x),
+            _none => String::from("/tmp")
+        };
+        for i in links_step_2 {
+            println!("{}", i);
+            links.push(String::from(i));
+            web_url.push(String::from(""));
+            local_url.push(String::from(fallback));
+        }
+    } else {
+        println!("settings.toml doesn't exist, creating...");
+        //TODO: terminal setup
+        fn write_file(settings_path : &String) -> std::io::Result<()> {
+            println!("write file {}", settings_path);
+            let mut buffer = fs::File::create(settings_path)?;
+            buffer.write_all(b"links = \"1,2\"\noutput_dir=\"/tmp\"\nfallback=\"/usr/share/desktop-base/emerald-theme/wallpaper/contents/images/1920x1080.svg\"")?;
+            Ok(())
+        }
+        let _ = write_file(&settings_path);
+        println!("Edit {} to set up walltaker.", settings_path);
+        return;
+    }
+    let sleep_time = Duration::from_secs(20);
+    let mut i = 1;
+    loop {
+        i += 1;
+        if i >= links.len() {
+            i = 1;
+        }
+        let test_url = update_link(links[i].as_str(), web_url[i].as_str());
+
+        thread::sleep(sleep_time);
+    }
+}
 
 /* old code
 const FALLBACK: &str = "../usr/share/desktop-base/homeworld-theme/wallpaper/contents/images/1920x1080.svg";

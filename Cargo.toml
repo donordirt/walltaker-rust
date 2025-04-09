@@ -4,5 +4,8 @@ version = "0.2.0"
 edition = "2021"
 
 [dependencies]
-more-wallpapers = "0.4.0"
 tokio = {version = "1.43.0", features = ["full"]}
+toml = "0.8.20"
+json = "0.12.4"
+reqwest = "0.12.15"
+more-wallpapers = "0.4.0"
