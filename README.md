@@ -14,3 +14,5 @@ If you want to, you can also set the wallpaper to download somewhere outside /tm
 Requires: libssl, libxrandr-dev
 
 DE support: https://crates.io/crates/more-wallpapers
+
+Searches for config at $XDG_CONFIG_HOME/walltaker.toml, then $HOME/.config/walltaker.toml, then ~/.config/walltaker.toml
