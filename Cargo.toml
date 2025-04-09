@@ -1,10 +1,11 @@
 [package]
 name = "walltaker-rust"
-version = "0.1.1"
+version = "0.2.0"
 edition = "2021"
 
 [dependencies]
-json = "0.12.4"
-more-wallpapers = "0.4.0"
-reqwest = {version=  "0.12.12", features = ["json"]}
 tokio = {version = "1.43.0", features = ["full"]}
+toml = "0.8.20"
+json = "0.12.4"
+reqwest = "0.12.15"
+more-wallpapers = "0.4.0"
