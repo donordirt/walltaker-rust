@@ -1,15 +1,6 @@
 
-/*
-This was my first time writing something in rust.
-It took way to long, but know I can say I understand rust and almost not be lying.
-If you have any rust experience, feel free to try and clean this mess up.
-I should try to make this smaller, but eh
 
-Yes, you probably have to change the fallback wallpaper below.
-It's relative to the output folder, so have have fun with that.
-*/
-
-
+/* old code
 const FALLBACK: &str = "../usr/share/desktop-base/homeworld-theme/wallpaper/contents/images/1920x1080.svg";
 const FOLDER: &str = "/tmp/";
 use std::thread;
@@ -105,3 +96,4 @@ async fn main() {
         }
     }
 }
+*/
