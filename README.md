@@ -1,18 +1,16 @@
 # walltaker-rust
 Another Walltaker client, written in Rust for Linux.
 
-I know this isn't good, but I made this for myself. It uses more-wallpapers, allowing multi-monitor support.
-The program automatically creates a links.txt file in your working directory, edit the file to have your Walltaker links.
+The reason I wrote this is to give myself multi-monitor support. For most people, simpler solutions will be better. This also probably doesn't work on Windows.
 
-To build, change the fallback wallpaper in src/main.rs, then you should be able to just `cargo build` it, I hope.
+When ran for the first time, the program will ask for configuration. You should be able to follow the on screen instructions.
 
-If you want to, you can also set the wallpaper to download somewhere outside /tmp/, and the fallback doesn't matter.
+Searches for config at $XDG_CONFIG_HOME/walltaker.toml, then $HOME/.config/walltaker.toml.
 
-(there's 0 error checking, and i've never written rust before. good luck)
+You can check desktop enviroment support is at https://crates.io/crates/more-wallpapers. I've only tested KDE, but everything else with per-screen support should work.
 
-
-Requires: libssl, libxrandr-dev
-
-DE support: https://crates.io/crates/more-wallpapers
-
-Searches for config at $XDG_CONFIG_HOME/walltaker.toml, then $HOME/.config/walltaker.toml, then ~/.config/walltaker.toml
+To build: (On Debian, if you use arch and you can't figure this out i can't help you)
+`sudo apt install cargo libssl libsrandr-dev`
+`git clone https://github.com/donordirt/walltaker-rust.git`
+`cd walltaker-rust`
+`cargo build --release`
