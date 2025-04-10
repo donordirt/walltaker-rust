@@ -1,6 +1,7 @@
 
 use std::env;
 use std::fs;
+use std::io;
 use std::io::Write;
 use reqwest;
 use toml::Table;
@@ -11,7 +12,7 @@ use std::thread;
 use reqwest::Error;
 use json::parse;
 
-fn parse_env_var(res: &str) -> String {
+fn fix_path(res: &str) -> String {
     if res.ends_with("/") {
         return String::from(res);
     } else {
@@ -72,19 +73,16 @@ fn update_wallpapers(images: &Vec<String>, fallback: &str) {
 
 #[tokio::main]
 async fn main() {
-    //TODO: test if this even works
     let xdg_config_home : Result<String, env::VarError> = env::var("XDG_CONFIG_HOME");
     let user_home : Result<String, env::VarError> = env::var("HOME");
     let home : String;
     let path : String;
-    //TODO: toml
-    //println!("{:?}", xdg_config_home);
     home = match user_home {
         Ok(res) => res,
         Err(_) => String::from("~")
     };
     path = match xdg_config_home {
-        Ok(res) =>  parse_env_var(&res),
+        Ok(res) =>  fix_path(&res),
         Err(_) => String::from(home + "/.config/")
     };
     let settings_path = path.to_owned() + "walltaker.toml";
@@ -94,14 +92,12 @@ async fn main() {
     let mut local_url = vec![String::from("")];
     let output_dir : String;
     let fallback : String;
-    //println!("{:?}", path);
     if file.exists() {
         println!("Loading settings from {}", settings_path);
         let contents = fs::read_to_string(settings_path)
                 .expect("Should have been able to read the file")
                 .to_string();
         let table = contents.parse::<Table>().unwrap();
-        //println!("{}", table["links"]);
         let links_step_1 = table["links"].as_str();
         let links_step_2;
         match links_step_1 {
@@ -115,7 +111,7 @@ async fn main() {
         };
         let output_option = table["output_dir"].as_str();
         output_dir = match output_option {
-            Some(x) => parse_env_var(x),
+            Some(x) => fix_path(x),
             _none => String::from("/tmp")
         };
         for i in links_step_2 {
@@ -126,16 +122,77 @@ async fn main() {
         }
     } else {
         println!("walltaker.toml doesn't exist, creating...");
-        //TODO: terminal setup
-        fn write_file(settings_path : &String) -> std::io::Result<()> {
-            println!("write file {}", settings_path);
+        println!("You can edit {} later to modify these settings.", settings_path);
+        let mut settings_str: String = String::from("links=\"");
+        
+        let mut adding_links : bool = true;
+        let mut first_link : bool = true;
+        let mut second_link : bool = true;
+        let stdin = io::stdin();
+        while adding_links {
+            if !first_link && second_link {
+                println!("Press enter without typing anything to continue.");
+                second_link = false;
+            } else if first_link {
+                println!("Enter your links, one at a time: ");
+            }
+            let mut link_in = String::new();
+            stdin.read_line(&mut link_in).expect("Failed to read stdin");
+            link_in.pop();
+            if link_in == "" && !first_link {
+                adding_links = false;
+            } else {
+                //there's probably an easier way to do this but it works
+                if first_link {
+                    settings_str = settings_str + link_in.as_str();
+                    first_link = false;
+                } else {
+                    settings_str = settings_str + "," + link_in.as_str();
+                }
+                links.push(link_in);
+                web_url.push(String::from(""));
+            }
+        }
+        
+        println!("\nSpecify where files should be written to: (defaults to /tmp/ if you don't enter anything)");
+        let mut output_in : String = String::new();
+        stdin.read_line(&mut output_in).expect("Failed to read stdin");
+        output_in.pop();
+        let mut using_temp = false;
+        if output_in == "" {
+            output_in = String::from("/tmp/");
+            using_temp = true;
+        } else if fix_path(output_in.as_str()) == "/tmp/" {
+            using_temp = true;
+        }
+        settings_str = settings_str + "\"\noutput_dir=\"" + output_in.as_str();
+        output_dir = output_in;
+
+        println!("\nSpecify a fallback wallpaper.");
+        println!("This wallpaper will be used when starting your computer and on extra monitors.");
+        if !using_temp {
+            println!("If you specified a directory outside of /tmp/ before, you can ignore this.");
+        }
+        println!("Enter path:");
+        let mut fallback_in : String = String::new();
+        stdin.read_line(&mut fallback_in).expect("Failed to read stdin");
+        settings_str = settings_str + "\"\nfallback=\"" + fallback_in.as_str() + "\"";
+        for i in &links {
+            if i != "" {
+                local_url.push(String::from(fallback_in.as_str()));
+            }
+        }
+        fallback = fallback_in;
+
+        fn write_file(settings_path : &String, settings_str: &str) -> std::io::Result<()> {
+            println!("\nWrote file {}", settings_path);
             let mut buffer = fs::File::create(settings_path)?;
-            buffer.write_all(b"links = \"1,2\"\noutput_dir=\"/tmp\"\nfallback=\"/usr/share/desktop-base/emerald-theme/wallpaper/contents/images/1920x1080.svg\"")?;
+            buffer.write_all(settings_str.as_bytes())?;
             Ok(())
         }
-        let _ = write_file(&settings_path);
-        println!("Edit {} to set up walltaker.", settings_path);
-        return;
+        let _ = write_file(&settings_path, settings_str.as_str());
+        println!("I'd recommend adding this file as a startup script.");
+        thread::sleep(Duration::from_secs(5));
     }
     let sleep_time = Duration::from_secs(20);
     let mut i = 1;
