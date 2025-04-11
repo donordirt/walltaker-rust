@@ -177,6 +177,7 @@ async fn main() {
         let mut fallback_in : String = String::new();
         stdin.read_line(&mut fallback_in).expect("Failed to read stdin");
         settings_str = settings_str + "\"\nfallback=\"" + fallback_in.as_str() + "\"";
+        fallback_in.pop();
         for i in &links {
             if i != "" {
                 local_url.push(String::from(fallback_in.as_str()));
