@@ -104,7 +104,7 @@ async fn main() {
             Some(x) => links_step_2 = x.split(","),
             _none => return
         }
-        let fallback_option = table["fallbacks"].as_str();
+        let fallback_option = table["fallback"].as_str();
         fallback = match fallback_option {
             Some(x) => String::from(x),
             _none => String::from("")
