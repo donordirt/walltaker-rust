@@ -10,7 +10,9 @@ Searches for config at $XDG_CONFIG_HOME/walltaker.toml, then $HOME/.config/wallt
 You can check desktop enviroment support is at https://crates.io/crates/more-wallpapers. I've only tested KDE, but everything else with per-screen support should work.
 
 To build: (On Debian, if you use arch and you can't figure this out i can't help you)
-`sudo apt install cargo libssl libsrandr-dev`
-`git clone https://github.com/donordirt/walltaker-rust.git`
-`cd walltaker-rust`
-`cargo build --release`
+```
+sudo apt install cargo libssl libsrandr-dev
+git clone https://github.com/donordirt/walltaker-rust.git
+cd walltaker-rust
+cargo build --release
+```
