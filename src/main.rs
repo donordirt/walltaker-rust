@@ -197,10 +197,14 @@ async fn main() {
     }
     let sleep_time = Duration::from_secs(20);
     let mut i = 1;
+    let mut first_loop = true;
     loop {
         i += 1;
         if i >= links.len() {
             i = 1;
+            if first_loop {
+                first_loop = false;
+            }
         }
         let test_url = update_link(links[i].as_str(), web_url[i].as_str()).await;
         if test_url != web_url[i] {
@@ -215,6 +219,8 @@ async fn main() {
                 Err(e) => println!("{:?}", e)
             }
         }
-        thread::sleep(sleep_time);
+        if !first_loop {
+            thread::sleep(sleep_time);
+        }
     }
 }
