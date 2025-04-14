@@ -20,6 +20,87 @@ fn fix_path(res: &str) -> String {
     }
 }
 
+fn prompt_links() -> Vec<String> {
+    let mut res: Vec<String> = Vec::new();
+    let stdin = io::stdin();
+    let mut adding_links : bool = true;
+    let mut first_link : bool = true;
+    let mut second_link : bool = true;
+    while adding_links {
+        if !first_link && second_link {
+            println!("Press enter without typing anything to continue.");
+            second_link = false;
+        } else if first_link {
+            println!("Enter your links, one at a time: ");
+        }
+        let mut link_in = String::new();
+        stdin.read_line(&mut link_in).expect("Failed to read stdin");
+        link_in.pop();
+        if link_in == "" && !first_link {
+            adding_links = false;
+        } else {
+            let valid_numbers = vec!["0","1","2","3","4","5","6","7","8","9"];
+            let mut valid_link = true;
+            for char in link_in.chars() {
+                if !valid_numbers.contains(&char.to_string().as_str()) {
+                    println!("Invalid character {} in link {}", char, link_in);
+                    valid_link = false;
+                    break;
+                }
+            }
+            if valid_link {
+                res.push(link_in);
+                if first_link {
+                    first_link = false;
+                }
+            }
+        }
+    }
+    return res;
+}
+
+fn prompt_output_dir() -> String {
+    let stdin = io::stdin();
+    println!("\nSpecify where files should be written to: (defaults to /tmp/ if you don't enter anything)");
+    let mut output_in : String = String::new();
+    stdin.read_line(&mut output_in).expect("Failed to read stdin");
+    output_in.pop();
+    if output_in == "" {
+        output_in = String::from("/tmp/");
+    }
+    return fix_path(output_in.as_str());
+}
+
+fn prompt_fallback(using_temp: bool) -> String {
+    let stdin = io::stdin();
+    println!("\nSpecify a fallback wallpaper.");
+    println!("This wallpaper will be used when starting your computer and on extra monitors.");
+    if !using_temp {
+        println!("If you specified a directory outside of /tmp/ before, you can ignore this.");
+    }
+    println!("Enter path:");
+    let mut fallback_in : String = String::new();
+    stdin.read_line(&mut fallback_in).expect("Failed to read stdin");
+    fallback_in.pop();
+    return String::from(fallback_in);
+}
+
+fn create_settings_file(
+    write_to: &str,
+    links: &str,
+    output_dir: &str,
+    fallback: &str
+) -> std::io::Result<()> {
+    let output_str: String = String::from("links=\"") +
+        links + "\"\noutput_dir=\"" + 
+        output_dir + "\"\nfallback=\""+
+        fallback + "\"";
+    let mut buffer = fs::File::create(write_to)?;
+    buffer.write_all(output_str.as_bytes())?;
+    println!("\nWrote file {}", write_to);
+    return Ok(());
+}
+
 async fn update_link(id: &str, old: &str) -> String {
     async fn helper(id: &str, _old: &str) -> Result<String, Error> {
         let res = 
@@ -31,13 +112,21 @@ async fn update_link(id: &str, old: &str) -> String {
     let out = helper(id, old).await;
     match out {
         Ok(json) => {
-            let parsed = parse(json.as_str()).unwrap();
-            let mut output_str : String = json::stringify(parsed["post_url"].clone());
-            output_str.pop();
-            output_str.remove(0);
-            return output_str;
+            let parsed_result = parse(json.as_str());
+            match parsed_result {
+                Ok(parsed) => {
+                    let mut output_str : String = json::stringify(parsed["post_url"].clone());
+                    output_str.pop();
+                    output_str.remove(0);
+                    return output_str;
+                },
+                Err(_) => {
+                    println!("Failed to get JSON from walltaker for link {}",id);
+                    return String::from(old)
+                }
+            }
         },
-        Err(_e) => return String::from(old)
+        Err(_) => return String::from(old)
     }
 }
 
@@ -73,6 +162,14 @@ fn update_wallpapers(images: &Vec<String>, fallback: &str) {
 
 #[tokio::main]
 async fn main() {
+    let args: Vec<String> = env::args().collect();
+    let mut args_iter = args.into_iter();
+    let fix_option = args_iter.find(|x| x == "--fix");
+    let fix = match fix_option {
+        Some(_) => true,
+        _ => false
+    };
+
     let xdg_config_home : Result<String, env::VarError> = env::var("XDG_CONFIG_HOME");
     let user_home : Result<String, env::VarError> = env::var("HOME");
     let home : String;
@@ -87,121 +184,191 @@ async fn main() {
     };
     let settings_path = path.to_owned() + "walltaker.toml";
     let file = std::path::Path::new(&settings_path);
-    let mut links = vec![String::from("")];
-    let mut web_url = vec![String::from("")];
-    let mut local_url = vec![String::from("")];
+    let mut links: Vec<String> = Vec::new();
+    let mut web_url: Vec<String> = Vec::new();
+    let mut local_url: Vec<String> = Vec::new();
     let output_dir : String;
     let fallback : String;
     if file.exists() {
         println!("Loading settings from {}", settings_path);
-        let contents = fs::read_to_string(settings_path)
-                .expect("Should have been able to read the file")
-                .to_string();
-        let table = contents.parse::<Table>().unwrap();
-        let links_step_1 = table["links"].as_str();
-        let links_step_2;
-        match links_step_1 {
-            Some(x) => links_step_2 = x.split(","),
-            _none => return
+        let contents = fs::read_to_string(&settings_path)
+                .expect("Should have been able to read the file");
+        let table_res = contents.parse::<Table>();
+        match table_res {
+            Ok(_) => {
+                let table = table_res.unwrap();
+                let mut modified_toml = false;
+                let links_step_1 = table["links"].as_str();
+                let links_step_2: Vec<String>;
+                match links_step_1 {
+                    Some(x) => {
+                        if x != "" {
+                            let old_vec = x.split(",");
+                            let mut new_vec: Vec<String> = Vec::new();
+                            for i in old_vec {
+                                new_vec.push(String::from(i));
+                            }
+                            links_step_2 = new_vec;
+                        } else if fix {
+                            modified_toml = true;
+                            links_step_2 = prompt_links();
+                        } else {
+                            return;
+                        }
+                    },
+                    _none => {
+                        if fix {
+                            links_step_2 = prompt_links();
+                        } else {
+                            return;
+                        }
+                    }
+                }
+                let output_option = table["output_dir"].as_str();
+                match output_option {
+                    Some(x) => {
+                        if x == "" {
+                            if fix {
+                                modified_toml = true;
+                                output_dir = fix_path(prompt_output_dir().as_str());
+                            } else {
+                                println!("Failed to read output directory, defaulting to /tmp/");
+                                modified_toml = true;
+                                output_dir = fix_path("/tmp/");
+                            }
+                        } else {
+                            output_dir = fix_path(x)
+                        }
+                    },
+                    _none => {
+                        if fix {
+                            output_dir = prompt_output_dir();
+                            modified_toml = true;
+                        } else {
+                            println!("Failed to read output directory, defaulting to /tmp/");
+                            modified_toml = true;
+                            output_dir = fix_path("/tmp/");
+                        }
+                    }
+                }
+                let using_temp = output_dir == "/tmp/";
+                let fallback_option = table["fallback"].as_str();
+                match fallback_option {
+                    Some(x) => {
+                        if x == "" {
+                            if fix {
+                                fallback = prompt_fallback(using_temp);
+                                modified_toml = true;
+                            } else {
+                                println!("Failed to read fallback wallpaper, ignoring...");
+                                fallback = String::from("");
+                            }
+                        } else {
+                            fallback = String::from(x);
+                        }
+                    },
+                    _none => {
+                        if fix {
+                            fallback = prompt_fallback(using_temp);
+                        } else {
+                            println!("Failed to read fallback wallpaper, ignoring...");
+                            fallback = String::from("");
+                            modified_toml = true;
+                        }
+                    }
+                }
+                /*
+                fallback = match fallback_option {
+                    Some(x) => String::from(x),
+                    _none => String::from("")
+                };
+                */
+                
+                for i in links_step_2 {
+                    links.push(i);
+                    web_url.push(String::from(""));
+                    local_url.push(String::from(fallback.as_str()));
+                }
+                if modified_toml {
+                    let _ = create_settings_file(
+                        &settings_path, 
+                        links.join(",").as_str(), 
+                        output_dir.as_str(), 
+                        fallback.as_str()
+                    );
+                }
+            },
+            Err(_) => {
+                println!("Failed to read walltaker.toml");
+                if fix {
+                    println!("Creating new file at {}", settings_path);
+                    let links_in = prompt_links();
+                    for i in links_in {
+                        links.push(i);
+                        web_url.push(String::from(""));
+                    }
+
+                    output_dir = prompt_output_dir();
+                    let using_temp = output_dir == "/tmp/";
+
+                    fallback = prompt_fallback(using_temp);
+                    for i in &links {
+                        if i != "" {
+                            local_url.push(String::from(fallback.as_str()));
+                        }
+                    }
+
+                    let _ = create_settings_file(
+                        &settings_path, 
+                        links.join(",").as_str(), 
+                        output_dir.as_str(), 
+                        fallback.as_str()
+                    );
+                } else {
+                    println!("Run this file with the arguement --fix to create a new file.");
+                    return
+                }
+                return
+            }
         }
-        let fallback_option = table["fallback"].as_str();
-        fallback = match fallback_option {
-            Some(x) => String::from(x),
-            _none => String::from("")
-        };
-        let output_option = table["output_dir"].as_str();
-        output_dir = match output_option {
-            Some(x) => fix_path(x),
-            _none => String::from("/tmp")
-        };
-        for i in links_step_2 {
-            println!("{}", i);
-            links.push(String::from(i));
-            web_url.push(String::from(""));
-            local_url.push(String::from(fallback.as_str()));
-        }
+        
     } else {
         println!("walltaker.toml doesn't exist, creating...");
         println!("You can edit {} later to modify these settings.", settings_path);
-        let mut settings_str: String = String::from("links=\"");
-        
-        let mut adding_links : bool = true;
-        let mut first_link : bool = true;
-        let mut second_link : bool = true;
-        let stdin = io::stdin();
-        while adding_links {
-            if !first_link && second_link {
-                println!("Press enter without typing anything to continue.");
-                second_link = false;
-            } else if first_link {
-                println!("Enter your links, one at a time: ");
-            }
-            let mut link_in = String::new();
-            stdin.read_line(&mut link_in).expect("Failed to read stdin");
-            link_in.pop();
-            if link_in == "" && !first_link {
-                adding_links = false;
-            } else {
-                //there's probably an easier way to do this but it works
-                if first_link {
-                    settings_str = settings_str + link_in.as_str();
-                    first_link = false;
-                } else {
-                    settings_str = settings_str + "," + link_in.as_str();
-                }
-                links.push(link_in);
-                web_url.push(String::from(""));
-            }
-        }
-        
-        println!("\nSpecify where files should be written to: (defaults to /tmp/ if you don't enter anything)");
-        let mut output_in : String = String::new();
-        stdin.read_line(&mut output_in).expect("Failed to read stdin");
-        output_in.pop();
-        let mut using_temp = false;
-        if output_in == "" {
-            output_in = String::from("/tmp/");
-            using_temp = true;
-        } else if fix_path(output_in.as_str()) == "/tmp/" {
-            using_temp = true;
-        }
-        settings_str = settings_str + "\"\noutput_dir=\"" + output_in.as_str();
-        output_dir = output_in;
 
-        println!("\nSpecify a fallback wallpaper.");
-        println!("This wallpaper will be used when starting your computer and on extra monitors.");
-        if !using_temp {
-            println!("If you specified a directory outside of /tmp/ before, you can ignore this.");
+        let links_in = prompt_links();
+        for i in links_in {
+            links.push(i);
+            web_url.push(String::from(""));
         }
-        println!("Enter path:");
-        let mut fallback_in : String = String::new();
-        stdin.read_line(&mut fallback_in).expect("Failed to read stdin");
-        settings_str = settings_str + "\"\nfallback=\"" + fallback_in.as_str() + "\"";
-        fallback_in.pop();
+        
+        output_dir = prompt_output_dir();
+        let using_temp = output_dir == "/tmp/";
+
+        
+        fallback = prompt_fallback(using_temp);
         for i in &links {
             if i != "" {
-                local_url.push(String::from(fallback_in.as_str()));
+                local_url.push(String::from(fallback.as_str()));
             }
         }
-        fallback = fallback_in;
 
-        fn write_file(settings_path : &String, settings_str: &str) -> std::io::Result<()> {
-            println!("\nWrote file {}", settings_path);
-            let mut buffer = fs::File::create(settings_path)?;
-            buffer.write_all(settings_str.as_bytes())?;
-            Ok(())
-        }
-        let _ = write_file(&settings_path, settings_str.as_str());
+        let _ = create_settings_file(
+            &settings_path, 
+            links.join(",").as_str(), 
+            output_dir.as_str(), 
+            fallback.as_str()
+        );
         println!("I'd recommend adding this file as a startup script.");
         thread::sleep(Duration::from_secs(5));
     }
     let sleep_time = Duration::from_secs(20);
-    let mut i = 1;
+    let mut i = 0;
     let mut first_loop = true;
     loop {
         i += 1;
         if i >= links.len() {
-            i = 1;
+            i = 0;
             if first_loop {
                 first_loop = false;
             }
@@ -215,7 +382,11 @@ async fn main() {
             let download = download_file(web_url[i].as_str(), local_url[i].as_str()).await;
             println!("{}", local_url[i]);
             match download {
-                Ok(_) => update_wallpapers(&local_url, fallback.as_str()),
+                Ok(_) => {
+                    if !first_loop || links.len() - 1 == i {
+                        update_wallpapers(&local_url, fallback.as_str());
+                    }
+                },
                 Err(e) => println!("{:?}", e)
             }
         }
