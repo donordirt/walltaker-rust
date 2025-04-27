@@ -76,7 +76,7 @@ fn prompt_fallback(using_temp: bool) -> String {
     println!("\nSpecify a fallback wallpaper.");
     println!("This wallpaper will be used when starting your computer and on extra monitors.");
     if !using_temp {
-        println!("If you specified a directory outside of /tmp/ before, you can ignore this.");
+        println!("If you specified a directory outside of /tmp/ before, you can probably ignore this.");
     }
     println!("Enter path:");
     let mut fallback_in : String = String::new();
@@ -365,6 +365,17 @@ async fn main() {
     let sleep_time = Duration::from_secs(20);
     let mut i = 0;
     let mut first_loop = true;
+    let using_temp = output_dir == "/tmp/";
+    if using_temp {
+        //On KDE, setting a wallpaper to what it's currently set as does nothing.
+        //If the wallpaper fails to load, it uses the fallback.
+
+        //These 2 mean if a file is stored in /tmp/, it's deleted, the fallback is used,
+        //the wallpaper is redownloaded, and is never changed back to the correct wallpaper.
+
+        //Manually setting it to a different wallpaper and changing it back fixes this.
+        update_wallpapers(&local_url, fallback.as_str());
+    }
     loop {
         i += 1;
         if i >= links.len() {
