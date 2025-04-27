@@ -11,7 +11,7 @@ I've only tested KDE, but Sway, XFCE, and Cinnamon should work. The full list of
 
 To build: (On Debian, if you use arch and you can't figure this out i can't help you)
 ```
-sudo apt install cargo libssl libsrandr-dev
+sudo apt install cargo libssl-dev libxrandr-dev pkg-config
 git clone https://github.com/donordirt/walltaker-rust.git
 cd walltaker-rust
 cargo build --release
